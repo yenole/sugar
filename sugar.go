@@ -17,11 +17,14 @@ type Sugar struct {
 	mux    sync.RWMutex
 	svrs   map[string]*units
 	routes []Matcher
+
+	logger Logger
 }
 
-func New() *Sugar {
+func New(logger Logger) *Sugar {
 	s := &Sugar{
-		svrs: make(map[string]*units),
+		logger: logger,
+		svrs:   make(map[string]*units),
 	}
 	return s
 }
@@ -51,6 +54,7 @@ func (s *Sugar) handleRev(r *packet.Request, unit *Server) {
 	s.mux.RLock()
 	defer s.mux.RUnlock()
 
+	s.logger.Debugf("%s <==> %s:%s(%s)", unit.name, r.SN, r.Method, string(r.Params))
 	if svr, ok := s.svrs[r.SN]; ok {
 		req := packet.NewRequest("", r.Method, r.Params)
 		if r.ID == 0 {
@@ -68,16 +72,21 @@ func (s *Sugar) handleRev(r *packet.Request, unit *Server) {
 			}
 			rsp := packet.NewResponse(r.ID, resp)
 			unit.conn.WritePack(rsp)
-
 		}
+	} else {
+		rsp := &packet.Response{
+			ID:    r.ID,
+			Error: fmt.Sprintf("%s not found", r.SN),
+		}
+		unit.conn.WritePack(rsp)
 	}
 }
 
 func (s *Sugar) Run() {
 	s.Listen()
 
-	fmt.Printf("sugar listen %v\n", *Listen)
-	http.ListenAndServe(*Listen, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	s.logger.Infof("sugar listen %v\n", *listen)
+	http.ListenAndServe(*listen, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.mux.RLock()
 		defer s.mux.RUnlock()
 		for _, m := range s.routes {

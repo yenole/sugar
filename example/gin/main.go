@@ -13,7 +13,7 @@ func main() {
 	rt := gin.New()
 
 	uni := unit.New("api", &unit.Option{
-		Protocol: "tcp://localhost:8081",
+		Protocol: "tcp://35.220.206.100:7899",
 		Router: &route.Option{
 			Type:   0,
 			Host:   "ethsana.sana",

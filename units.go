@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 	"sync"
 
 	"github.com/yenole/sugar/packet"
@@ -20,13 +21,15 @@ type units struct {
 	mux  sync.RWMutex
 	dict map[string]*Server
 
-	route *route.Option
+	route  *route.Option
+	logger Logger
 }
 
 func newUnits(sg *Sugar, unit *Server) *units {
 	s := &units{
-		plot: unit.plot,
-		dict: make(map[string]*Server),
+		plot:   unit.plot,
+		logger: sg.logger,
+		dict:   make(map[string]*Server),
 	}
 	s.Rev(sg, unit)
 	return s
@@ -37,8 +40,10 @@ func (u *units) Match(r *http.Request) http.Handler {
 		return nil
 	}
 
-	fmt.Printf("r.URL.Host: %v\n", r.Host)
-	if u.route.Host == r.Host {
+	if v := r.Header.Get("Sugar-Host"); v != "" {
+		r.Host = v
+	}
+	if strings.Contains(u.route.Host, fmt.Sprintf(" %s ", r.Host)) {
 		url, _ := url.Parse(u.route.Listen)
 		return httputil.NewSingleHostReverseProxy(url)
 	}
@@ -50,7 +55,6 @@ func (u *units) WritePack(r *packet.Request, resp interface{}) error {
 		if resp == nil {
 			return s.conn.WritePack(r)
 		} else {
-
 			return s.conn.WritePack(r, resp)
 		}
 	}
@@ -68,10 +72,10 @@ func (u *units) Rev(sg *Sugar, unit *Server) error {
 	u.dict[unit.sid] = unit
 	io.WriteString(unit.conn, "sugar://welcome")
 
-	go unit.onReceive(func(r *packet.Request, s *Server) {
+	go unit.onReceive(u.logger, func(r *packet.Request, s *Server) {
 		u.handleRev(r, sg, unit)
 	}, func() {
-		fmt.Printf("name %s sid %s out\n", unit.name, unit.sid)
+		u.logger.Infof("sn:%s sid:%s quit", unit.name, unit.sid)
 		u.mux.Lock()
 		defer u.mux.Unlock()
 		delete(u.dict, unit.sid)
@@ -80,7 +84,7 @@ func (u *units) Rev(sg *Sugar, unit *Server) error {
 }
 
 func (u *units) handleRev(r *packet.Request, sg *Sugar, unit *Server) {
-	fmt.Printf("rev sn:%v id:%v method:%v params:%v\n", unit.name, r.ID, r.Method, string(r.Params))
+	u.logger.Debugf("rev sn:%v id:%v method:%v params:%v\n", unit.name, r.ID, r.Method, string(r.Params))
 
 	if r.SN != "" {
 		sg.handleRev(r, unit)
@@ -118,6 +122,9 @@ func (u *units) handleRouter(raw []byte, sg *Sugar) interface{} {
 		return err
 	}
 	defer func() {
+		if route.Host != "" {
+			route.Host = fmt.Sprintf(" %s ", route.Host)
+		}
 		u.route = &route
 	}()
 

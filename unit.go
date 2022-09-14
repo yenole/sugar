@@ -1,8 +1,6 @@
 package sugar
 
 import (
-	"fmt"
-
 	"github.com/yenole/sugar/network"
 	"github.com/yenole/sugar/packet"
 )
@@ -11,6 +9,8 @@ const (
 	ACT_ROUTER uint8 = iota
 )
 
+type Params map[string]interface{}
+
 type Server struct {
 	sid  string
 	name string
@@ -18,15 +18,14 @@ type Server struct {
 	conn network.Conn
 }
 
-func (s *Server) onReceive(h func(*packet.Request, *Server), close func()) {
-	fmt.Println(s.conn.RemoteAddr())
-	fmt.Printf("name %s sid %s join sugar\n", s.name, s.sid)
+func (s *Server) onReceive(logger Logger, h func(*packet.Request, *Server), close func()) {
 	defer close()
 
+	logger.Infof("name %s sid %s join sugar\n", s.name, s.sid)
 	for {
 		req, err := s.conn.Request()
 		if err != nil {
-			fmt.Printf("err: %v\n", err)
+			logger.Errorf("sn:%s sid:%s request err: %v\n", err)
 			return
 		}
 

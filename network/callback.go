@@ -38,7 +38,8 @@ func (c *callback) Write(w io.Writer, req *packet.Request, resp interface{}) err
 		done <- rsp.UnPack(resp)
 	}
 
-	ctx, _ := context.WithTimeout(context.TODO(), time.Second*5)
+	ctx, cancel := context.WithTimeout(context.TODO(), time.Minute)
+	defer cancel()
 
 	err := req.Write(w)
 	if err != nil {

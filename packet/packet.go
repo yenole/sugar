@@ -55,6 +55,14 @@ type Response struct {
 	Result json.RawMessage `json:"result,omitempty"`
 }
 
+func NewRsp(id int, v interface{}) *Response {
+	if err, ok := v.(error); ok {
+		return &Response{ID: id, Error: err.Error()}
+	}
+	byts, _ := json.Marshal(v)
+	return &Response{ID: id, Result: byts}
+}
+
 func NewResponse(id int, v interface{}) *Response {
 	byts, _ := json.Marshal(v)
 	return &Response{ID: id, Result: byts}

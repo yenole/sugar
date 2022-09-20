@@ -6,10 +6,9 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/url"
-	"strings"
 	"time"
 
+	"github.com/yenole/sugar/group"
 	"github.com/yenole/sugar/network"
 )
 
@@ -50,21 +49,16 @@ func (s *Sugar) onAcceptRevAuth(cnn net.Conn) {
 		return
 	}
 
-	url, err := url.Parse(string(byts[:n]))
-	if err != nil || url.Path == "/" || url.Path == "" {
-		s.logger.Errorf("accept is not sugar unit")
-		cnn.Close()
-		return
+	un, err := group.NewUnit(
+		PickSId(cnn.RemoteAddr()),
+		network.Wrap(cnn),
+		string(byts[:n]),
+	)
+	if err != nil {
+		s.logger.Errorf("accept sugar unit fail:%v", err.Error())
 	}
 
-	svr := &Server{
-		sid:  PickSId(cnn.RemoteAddr()),
-		plot: url.Query().Get("plot"),
-		name: strings.TrimPrefix(url.Path, "/"),
-		conn: network.Wrap(cnn),
-	}
-
-	err = s.revUnit(svr)
+	err = s.onRevUnit(un)
 	if err != nil {
 		s.logger.Errorf("err: %v\n", err)
 		cnn.Close()

@@ -10,7 +10,9 @@ import (
 
 	"github.com/yenole/sugar"
 	"github.com/yenole/sugar/handler"
+	"github.com/yenole/sugar/logger"
 	"github.com/yenole/sugar/network"
+	"github.com/yenole/sugar/network/async"
 	"github.com/yenole/sugar/packet"
 	"github.com/yenole/sugar/route"
 )
@@ -20,6 +22,7 @@ type Params map[string]interface{}
 type Option struct {
 	Plot     uint8
 	Protocol string
+	Logger   logger.Logger
 	Router   *route.Option
 }
 
@@ -29,13 +32,22 @@ type Unit struct {
 	conn   network.Conn
 
 	handler *handler.Handler
+	async   *async.Async
+	logger  logger.Logger
 }
 
 func New(name string, option *Option) *Unit {
+	if option.Logger == nil {
+		option.Logger = newLogger()
+	}
+
 	return &Unit{
 		name:    name,
 		option:  option,
 		handler: &handler.Handler{},
+
+		async:  async.New(),
+		logger: option.Logger,
 	}
 }
 
@@ -62,7 +74,7 @@ func (u *Unit) dailer(addr string) {
 	case "tcp":
 		cnn, err := net.Dial("tcp", addrs[1])
 		if err != nil {
-			fmt.Printf("err: %v\n", err)
+			u.logger.Errorf("dialer %v fail:%v", addr[1], err.Error())
 			time.AfterFunc(time.Second*5, func() { u.dailer(u.option.Protocol) })
 			return
 		}
@@ -77,7 +89,7 @@ func (u *Unit) onDailerSugar(cnn network.Conn) {
 	byts := make([]byte, 1024)
 	n, err := cnn.Read(byts)
 	if err != nil {
-		fmt.Printf("err: %v\n", err)
+		u.logger.Errorf("read sugar bytes fail:%v", err.Error())
 		return
 	}
 	if !bytes.Equal(byts[:n], []byte("sugar://welcome")) {
@@ -92,44 +104,41 @@ func (u *Unit) onDailerSugar(cnn network.Conn) {
 		var ret json.RawMessage
 		err := u.Call("", "route", u.option.Router, &ret)
 		if err != nil {
-			fmt.Printf("err: %v\n", err)
+			u.logger.Errorf("regist router fail:%v", err.Error())
 			return
 		}
-		fmt.Printf("string(ret): %v\n", string(ret))
+		u.logger.Debugf("reigst router result:%v", string(ret))
 	}
 }
 
+func (u *Unit) onRevProc(cnn network.Conn, r *packet.Request) func() {
+	return func() {
+		rsp, err := u.handler.Handler(r.Method, r.Params)
+		if r.ID == 0 {
+			u.logger.Debugf("rev %v params:%v", r.Method, string(r.Params))
+			return
+		}
+
+		if err != nil {
+			cnn.WritePack(packet.NewRsp(r.ID, err))
+			u.logger.Debugf("rev %v params:%v err:%v", r.Method, string(r.Params), err.Error())
+		} else {
+			cnn.WritePack(packet.NewRsp(r.ID, rsp))
+			u.logger.Debugf("rev %v params:%v result:%v", r.Method, string(r.Params), rsp)
+		}
+	}
+}
 func (u *Unit) onRev(cnn network.Conn) {
 	defer u.dailer(u.option.Protocol)
 
 	for {
-		req, err := cnn.Request()
+		req, err := cnn.ReadPack()
 		if err != nil {
 			fmt.Printf("err: %v\n", err)
 			return
 		}
 
-		go func(req *packet.Request) {
-			ret, err := u.handler.Handler(req.Method, req.Params)
-			if req.ID == 0 {
-				fmt.Printf("req: %v params:%v\n", req.Method, string(req.Params))
-				return
-			}
-
-			if err != nil {
-				resp := packet.Response{
-					ID:    req.ID,
-					Error: err.Error(),
-				}
-				cnn.WritePack(&resp)
-
-				fmt.Printf("req: %v params:%v error:%v\n", req.Method, string(req.Params), err.Error())
-				return
-			}
-			resp := packet.NewResponse(req.ID, ret)
-			cnn.WritePack(resp)
-			fmt.Printf("req: %v params:%v result:%v\n", req.Method, string(req.Params), ret)
-		}(req)
+		u.async.Do(u.onRevProc(cnn, req))
 
 	}
 }

@@ -1,85 +1,44 @@
 package sugar
 
 import (
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"sync"
 
-	"github.com/yenole/sugar/packet"
+	"github.com/yenole/sugar/group"
+	"github.com/yenole/sugar/logger"
+	"github.com/yenole/sugar/network/async"
 )
 
-type Matcher interface {
-	Match(*http.Request) http.Handler
-}
-
 type Sugar struct {
-	mux    sync.RWMutex
-	svrs   map[string]*units
-	routes []Matcher
+	mux   sync.RWMutex
+	glist map[string]*group.Group
 
-	logger Logger
+	async  *async.Async
+	logger logger.Logger
 }
 
-func New(logger Logger) *Sugar {
+func New(logger logger.Logger) *Sugar {
 	s := &Sugar{
+		glist:  make(map[string]*group.Group),
+		async:  async.New(),
 		logger: logger,
-		svrs:   make(map[string]*units),
 	}
 	return s
 }
 
-func (s *Sugar) revUnit(unit *Server) error {
+func (s *Sugar) onRevUnit(un *group.Unit) error {
 	s.mux.Lock()
 	defer s.mux.Unlock()
+	if _, ok := s.glist[un.Name]; !ok {
+		s.glist[un.Name] = group.NewGroup(s.logger)
+	}
 
-	if list, ok := s.svrs[unit.name]; ok {
-		if err := list.Rev(s, unit); err != nil {
-			return err
-		}
-	} else {
-		s.svrs[unit.name] = newUnits(s, unit)
+	g := s.glist[un.Name]
+	if err := g.HandleRevUnit(un, s.done(un)); err != nil {
+		s.logger.Errorf("rev sugar unit fail:%v", err.Error())
+		return err
 	}
 	return nil
-}
-
-func (s *Sugar) revRoute(units *units) error {
-	s.mux.Lock()
-	defer s.mux.Unlock()
-	s.routes = append(s.routes, units)
-	return nil
-}
-
-func (s *Sugar) handleRev(r *packet.Request, unit *Server) {
-	s.mux.RLock()
-	defer s.mux.RUnlock()
-
-	s.logger.Debugf("%s <==> %s:%s(%s)", unit.name, r.SN, r.Method, string(r.Params))
-	if svr, ok := s.svrs[r.SN]; ok {
-		req := packet.NewRequest("", r.Method, r.Params)
-		if r.ID == 0 {
-			svr.WritePack(req, nil)
-		} else {
-			var resp json.RawMessage
-			err := svr.WritePack(req, &resp)
-			if err != nil {
-				rsp := &packet.Response{
-					ID:    r.ID,
-					Error: err.Error(),
-				}
-				unit.conn.WritePack(rsp)
-				return
-			}
-			rsp := packet.NewResponse(r.ID, resp)
-			unit.conn.WritePack(rsp)
-		}
-	} else {
-		rsp := &packet.Response{
-			ID:    r.ID,
-			Error: fmt.Sprintf("%s not found", r.SN),
-		}
-		unit.conn.WritePack(rsp)
-	}
 }
 
 func (s *Sugar) Run() {
@@ -89,8 +48,8 @@ func (s *Sugar) Run() {
 	http.ListenAndServe(*listen, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.mux.RLock()
 		defer s.mux.RUnlock()
-		for _, m := range s.routes {
-			if h := m.Match(r); h != nil {
+		for _, g := range s.glist {
+			if h := g.Match(r); h != nil {
 				h.ServeHTTP(w, r)
 				return
 			}

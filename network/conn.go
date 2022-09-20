@@ -1,8 +1,11 @@
 package network
 
 import (
+	"context"
+	"errors"
 	"io"
 	"net"
+	"time"
 
 	"github.com/yenole/sugar/packet"
 )
@@ -14,22 +17,27 @@ type Writer interface {
 type Conn interface {
 	net.Conn
 
-	Request() (*packet.Request, error)
+	ReadPack() (*packet.Request, error)
 
 	WritePack(Writer, ...interface{}) error
 }
 
-type conn struct {
+func Wrap(cnn net.Conn) *connrsp {
+	return &connrsp{Conn: cnn}
+}
+
+type connrsp struct {
 	net.Conn
-
-	resp *callback
+	dict map[int]func(*packet.Response)
 }
 
-func Wrap(cnn net.Conn) *conn {
-	return &conn{Conn: cnn, resp: &callback{}}
+func (c *connrsp) Done(resp *packet.Response) error {
+	if fn, ok := c.dict[resp.ID]; ok {
+		fn(resp)
+	}
+	return nil
 }
-
-func (c *conn) Request() (*packet.Request, error) {
+func (c *connrsp) ReadPack() (*packet.Request, error) {
 loop:
 	byts := make([]byte, 1)
 	_, err := c.Read(byts)
@@ -43,7 +51,7 @@ loop:
 		if err != nil {
 			return nil, err
 		}
-		c.resp.Done(&resp)
+		c.Done(&resp)
 		goto loop
 	}
 
@@ -51,9 +59,47 @@ loop:
 	return &req, req.Read(c)
 }
 
-func (c *conn) WritePack(w Writer, resp ...interface{}) error {
+func (c *connrsp) WritePack(w Writer, resp ...interface{}) error {
 	if v, ok := w.(*packet.Request); ok && len(resp) > 0 {
-		return c.resp.Write(c, v, resp[0])
+		return c.WriteWithRsp(v, resp[0])
 	}
 	return w.Write(c)
+}
+
+func (c *connrsp) WriteWithRsp(req *packet.Request, resp interface{}) error {
+	if c.dict == nil {
+		c.dict = make(map[int]func(*packet.Response))
+	}
+
+	done := make(chan error)
+	defer close(done)
+
+	req.ID = int(time.Now().UnixMilli())
+	c.dict[req.ID] = func(rsp *packet.Response) {
+		if rsp.Error != "" {
+			done <- errors.New(rsp.Error)
+			return
+		}
+
+		done <- rsp.UnPack(resp)
+	}
+
+	ctx, cancel := context.WithTimeout(context.TODO(), time.Minute)
+	defer cancel()
+
+	err := req.Write(c)
+	if err != nil {
+		delete(c.dict, req.ID)
+		return err
+	}
+
+	select {
+	case err := <-done:
+		delete(c.dict, req.ID)
+		return err
+
+	case <-ctx.Done():
+		delete(c.dict, req.ID)
+		return ctx.Err()
+	}
 }

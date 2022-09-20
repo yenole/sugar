@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/yenole/sugar/handler"
 	"github.com/yenole/sugar/unit"
+	"github.com/yenole/sugar/unit/handler"
 )
 
 func main() {

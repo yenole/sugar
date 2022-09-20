@@ -16,9 +16,9 @@ var (
 	hello = []byte(fmt.Sprintf(`sugar://%s`, Version))
 )
 
-func (s *Sugar) Listen() {
-	s.logger.Infof("sugar reigst listen %v", *gListen)
-	ln, err := net.Listen("tcp", *gListen)
+func (s *Sugar) Listen(listen string) {
+	s.logger.Infof("sugar reigst listen %v", listen)
+	ln, err := net.Listen("tcp", listen)
 	if err != nil {
 		s.logger.Errorf("err: %v\n", err)
 		return

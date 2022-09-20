@@ -59,7 +59,7 @@ func (g *Group) HandleRevUnit(un *Unit, do Done) error {
 	g.mux.Lock()
 	defer g.mux.Unlock()
 
-	if _, ok := g.dict[un.sid]; ok || g.plot != un.plot {
+	if _, ok := g.dict[un.sid]; ok {
 		return errors.New("uni not rev")
 	}
 

@@ -9,6 +9,11 @@ import (
 	"github.com/yenole/sugar/network/async"
 )
 
+type Option struct {
+	Listen  string
+	Gateway string
+}
+
 type Sugar struct {
 	mux   sync.RWMutex
 	glist map[string]*group.Group
@@ -41,11 +46,11 @@ func (s *Sugar) onRevUnit(un *group.Unit) error {
 	return nil
 }
 
-func (s *Sugar) Run() {
-	s.Listen()
+func (s *Sugar) Run(o *Option) {
+	s.Listen(o.Gateway)
 
-	s.logger.Infof("sugar listen %v\n", *listen)
-	http.ListenAndServe(*listen, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	s.logger.Infof("sugar listen %v\n", o.Listen)
+	http.ListenAndServe(o.Listen, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.mux.RLock()
 		defer s.mux.RUnlock()
 		for _, g := range s.glist {

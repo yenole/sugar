@@ -64,11 +64,11 @@ func (u *Unit) WritePack(w network.Writer) error {
 func (u *Unit) onRev(logger logger.Logger, do Done, close func()) {
 	defer close()
 
-	logger.Infof("name %s sid %s join sugar\n", u.Name, u.sid)
+	logger.Infof("sn:%s sid:%s join suagr", u.Name, u.sid)
 	for {
 		req, err := u.conn.ReadPack()
 		if err != nil {
-			logger.Errorf("sn:%s sid:%s request err: %v\n", err)
+			logger.Errorf("sn:%v sid:%s read pack err:%v", u.Name, u.sid, err.Error())
 			return
 		}
 

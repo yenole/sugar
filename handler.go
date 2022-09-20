@@ -2,6 +2,7 @@
 package sugar
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/yenole/sugar/group"
@@ -35,7 +36,14 @@ func (s *Sugar) handleRevRequest(r *packet.Request, un *group.Unit) func() {
 				s.logger.Errorf("%s <=> %s:%s(%v) err:%v", un.Name, r.SN, r.Method, string(r.Params), err.Error())
 				return
 			}
-			s.logger.Debugf("%s <=> %s:%s(%v) result:%v", un.Name, r.SN, r.Method, string(r.Params), rsp)
+			fmt.Printf("rsp: %v\n", rsp)
+			if err, ok := rsp.(error); ok {
+				s.logger.Debugf("%s <=> %s:%s(%v) err:%v", un.Name, r.SN, r.Method, string(r.Params), err.Error())
+			} else if rsp == nil {
+				s.logger.Debugf("%s <=> %s:%s(%v) result:%v", un.Name, r.SN, r.Method, string(r.Params), rsp)
+			} else if raw, ok := rsp.(*json.RawMessage); ok {
+				s.logger.Debugf("%s <=> %s:%s(%v) result:%v", un.Name, r.SN, r.Method, string(r.Params), string(*raw))
+			}
 			return
 		}
 		s.logger.Debugf("%s <=> %s:%s(%v) success", un.Name, r.SN, r.Method, string(r.Params))

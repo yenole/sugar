@@ -15,7 +15,7 @@ type done struct {
 }
 
 func (d *done) Do(r *packet.Request) {
-	d.s.async.Do(d.s.handleRevRequest(r, d.un))
+	d.s.g.Do(d.s.handleRevRequest(r, d.un))
 }
 
 func (s *Sugar) done(un *group.Unit) *done {
@@ -36,13 +36,12 @@ func (s *Sugar) handleRevRequest(r *packet.Request, un *group.Unit) func() {
 				s.logger.Errorf("%s <=> %s:%s(%v) err:%v", un.Name, r.SN, r.Method, string(r.Params), err.Error())
 				return
 			}
-			fmt.Printf("rsp: %v\n", rsp)
 			if err, ok := rsp.(error); ok {
 				s.logger.Debugf("%s <=> %s:%s(%v) err:%v", un.Name, r.SN, r.Method, string(r.Params), err.Error())
-			} else if rsp == nil {
-				s.logger.Debugf("%s <=> %s:%s(%v) result:%v", un.Name, r.SN, r.Method, string(r.Params), rsp)
 			} else if raw, ok := rsp.(*json.RawMessage); ok {
 				s.logger.Debugf("%s <=> %s:%s(%v) result:%v", un.Name, r.SN, r.Method, string(r.Params), string(*raw))
+			} else {
+				s.logger.Debugf("%s <=> %s:%s(%v) result:%v", un.Name, r.SN, r.Method, string(r.Params), rsp)
 			}
 			return
 		}
@@ -64,6 +63,9 @@ func (s *Sugar) HandlePack(r *packet.Request, un *group.Unit) interface{} {
 	switch r.Method {
 	case "route":
 		return s.handleRevRoute(r.Params, un)
+
+	case "state":
+		return s.handleRevState(r.Params, un)
 	}
 	return nil
 }
@@ -73,4 +75,8 @@ func (s *Sugar) handleRevRoute(raw []byte, un *group.Unit) interface{} {
 		return g.HandleRouter(raw, un)
 	}
 	return fmt.Errorf("not found %s group", un.Name)
+}
+
+func (s *Sugar) handleRevState(raw []byte, un *group.Unit) interface{} {
+	return nil
 }

@@ -22,10 +22,10 @@ type Unit struct {
 	name   string
 	option *Option
 	conn   network.Conn
+	logger logger.Logger
 
-	handler *handler.Handler
-	async   *async.Async
-	logger  logger.Logger
+	g *async.Async
+	h *handler.Handler
 }
 
 func New(name string, option *Option) *Unit {
@@ -34,17 +34,17 @@ func New(name string, option *Option) *Unit {
 	}
 
 	return &Unit{
-		name:    name,
-		option:  option,
-		handler: &handler.Handler{},
+		name:   name,
+		option: option,
+		h:      &handler.Handler{},
 
-		async:  async.New(),
+		g:      async.New(),
 		logger: option.Logger,
 	}
 }
 
 func (u *Unit) Handle(way string, fn handler.HandlerFunc) {
-	u.handler.Handle(way, fn)
+	u.h.Handle(way, fn)
 }
 
 func (u *Unit) Run() error {
@@ -55,7 +55,10 @@ func (u *Unit) Run() error {
 	return nil
 }
 
-func (u *Unit) Call(sn string, m string, req, resp interface{}) error {
+func (u *Unit) Call(sn string, m string, req, rsp interface{}) error {
 	r := packet.NewRequest(sn, m, req)
-	return u.conn.WritePack(r, resp)
+	if rsp == nil {
+		return u.conn.WritePack(r)
+	}
+	return u.conn.WritePack(r, rsp)
 }

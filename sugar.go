@@ -18,14 +18,15 @@ type Sugar struct {
 	mux   sync.RWMutex
 	glist map[string]*group.Group
 
-	async  *async.Async
 	logger logger.Logger
+
+	g *async.Async
 }
 
 func New(logger logger.Logger) *Sugar {
 	s := &Sugar{
 		glist:  make(map[string]*group.Group),
-		async:  async.New(),
+		g:      async.New(),
 		logger: logger,
 	}
 	return s

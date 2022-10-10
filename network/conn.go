@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/yenole/sugar/packet"
@@ -28,15 +29,20 @@ func Wrap(cnn net.Conn) *connrsp {
 
 type connrsp struct {
 	net.Conn
+	mux  sync.Mutex
 	dict map[int]func(*packet.Response)
 }
 
 func (c *connrsp) Done(resp *packet.Response) error {
+	c.mux.Lock()
 	if fn, ok := c.dict[resp.ID]; ok {
-		fn(resp)
+		delete(c.dict, resp.ID)
+		defer fn(resp)
 	}
+	defer c.mux.Unlock()
 	return nil
 }
+
 func (c *connrsp) ReadPack() (*packet.Request, error) {
 loop:
 	byts := make([]byte, 1)
@@ -73,7 +79,13 @@ func (c *connrsp) WriteWithRsp(req *packet.Request, resp interface{}) error {
 
 	done := make(chan error)
 	defer close(done)
+	defer func() {
+		c.mux.Lock()
+		defer c.mux.Unlock()
+		delete(c.dict, req.ID)
+	}()
 
+	c.mux.Lock()
 	req.ID = int(time.Now().UnixMilli())
 	c.dict[req.ID] = func(rsp *packet.Response) {
 		if rsp.Error != "" {
@@ -83,23 +95,21 @@ func (c *connrsp) WriteWithRsp(req *packet.Request, resp interface{}) error {
 
 		done <- rsp.UnPack(resp)
 	}
+	c.mux.Unlock()
 
 	ctx, cancel := context.WithTimeout(context.TODO(), time.Minute)
 	defer cancel()
 
 	err := req.Write(c)
 	if err != nil {
-		delete(c.dict, req.ID)
 		return err
 	}
 
 	select {
 	case err := <-done:
-		delete(c.dict, req.ID)
 		return err
 
 	case <-ctx.Done():
-		delete(c.dict, req.ID)
 		return ctx.Err()
 	}
 }

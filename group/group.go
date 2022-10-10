@@ -48,9 +48,9 @@ func (g *Group) Match(r *http.Request) http.Handler {
 	return nil
 }
 
-func (g *Group) HandlePack(r *packet.Request) interface{} {
-	for _, un := range g.dict {
-		return un.HandlePack(r)
+func (g *Group) HandlePack(r *packet.Request, un *Unit) interface{} {
+	for _, v := range g.dict {
+		return v.HandlePack(r, un)
 	}
 	return errors.New("not found unit")
 }

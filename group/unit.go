@@ -43,8 +43,8 @@ func NewUnit(sn string, cnn network.Conn, o string) (*Unit, error) {
 	}, nil
 }
 
-func (u *Unit) HandlePack(r *packet.Request) interface{} {
-	req := packet.NewRequest("", r.Method, r.Params)
+func (u *Unit) HandlePack(r *packet.Request, un *Unit) interface{} {
+	req := packet.NewRequest(un.Name, r.Method, r.Params)
 	if r.ID == 0 {
 		return u.conn.WritePack(req)
 	}

@@ -25,7 +25,7 @@ func (s *Sugar) handleRevRequest(r *packet.Request, un *group.Unit) func() {
 	return func() {
 		var rsp interface{}
 		if g := s.group(r.SN); g != nil {
-			rsp = g.HandlePack(r)
+			rsp = g.HandlePack(r, un)
 		} else {
 			rsp = s.HandlePack(r, un)
 		}

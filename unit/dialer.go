@@ -59,7 +59,7 @@ func (u *Unit) onDailerSugar(cnn network.Conn) {
 
 func (u *Unit) onRevProc(cnn network.Conn, r *packet.Request) func() {
 	return func() {
-		rsp, err := u.h.Handler(r.Method, r.Params)
+		rsp, err := u.h.Handler(r.SN, r.Method, r.Params)
 		if r.ID == 0 {
 			u.logger.Debugf("rev %v params:%v", r.Method, string(r.Params))
 			return

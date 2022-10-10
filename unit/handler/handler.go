@@ -6,7 +6,12 @@ import (
 )
 
 type Context struct {
+	who  string
 	byts []byte
+}
+
+func (c *Context) Who() string {
+	return c.who
 }
 
 func (c *Context) Bind(v interface{}) error {
@@ -31,14 +36,14 @@ func (h *Handler) NotFound(fn HandlerFunc) {
 	h.notFoundFn = fn
 }
 
-func (h *Handler) Handler(way string, params []byte) (interface{}, error) {
+func (h *Handler) Handler(from, way string, params []byte) (interface{}, error) {
 	fun := h.notFoundFn
 	if fn, ok := h.routes[way]; ok {
 		fun = fn
 	}
 
 	if fun != nil {
-		ret := fun(&Context{byts: params})
+		ret := fun(&Context{who: from, byts: params})
 		if err, ok := ret.(error); ok {
 			return nil, err
 		}

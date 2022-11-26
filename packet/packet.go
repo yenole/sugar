@@ -24,7 +24,7 @@ func NewRequest(sn, m string, req interface{}) *Request {
 }
 
 func (r *Request) Read(rr io.Reader) error {
-	byts := make([]byte, 2048)
+	byts := make([]byte, 4096)
 	_, err := rr.Read(byts[:4])
 	if err != nil {
 		return err

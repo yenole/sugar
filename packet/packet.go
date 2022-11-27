@@ -24,17 +24,17 @@ func NewRequest(sn, m string, req interface{}) *Request {
 }
 
 func (r *Request) Read(rr io.Reader) error {
-	byts := make([]byte, 4096)
-	_, err := rr.Read(byts[:4])
+	var buffer bytes.Buffer
+	_, err := io.CopyN(&buffer, rr, 4)
 	if err != nil {
 		return err
 	}
-	size := binary.BigEndian.Uint32(byts[:4])
-	_, err = rr.Read(byts[4:][:size])
+	size := binary.BigEndian.Uint32(buffer.Bytes()[:4])
+	_, err = io.CopyN(&buffer, rr, int64(size))
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal(byts[4:size+4], r)
+	return json.Unmarshal(buffer.Bytes()[4:], r)
 }
 
 func (r *Request) Write(w io.Writer) error {

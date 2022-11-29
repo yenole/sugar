@@ -88,6 +88,7 @@ func (c *connrsp) WriteWithRsp(req *packet.Request, resp interface{}) error {
 	c.mux.Lock()
 	req.ID = int(time.Now().UnixMilli())
 	c.dict[req.ID] = func(rsp *packet.Response) {
+		defer recover()
 		if rsp.Error != "" {
 			done <- errors.New(rsp.Error)
 			return

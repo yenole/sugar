@@ -2,11 +2,10 @@ package network
 
 import (
 	"context"
-	"crypto/rand"
 	"errors"
 	"io"
-	"math/big"
 	"net"
+	"reflect"
 	"sync"
 	"time"
 
@@ -89,7 +88,7 @@ func (c *connrsp) WriteWithRsp(req *packet.Request, resp interface{}) error {
 
 	c.mux.Lock()
 
-	req.ID = int(time.Now().UnixNano()) + randInt()
+	req.ID = int(time.Now().UnixNano()*10000) + int(reflect.ValueOf(req).Pointer())
 	c.dict[req.ID] = func(rsp *packet.Response) {
 		defer recover()
 		if rsp.Error != "" {
@@ -116,14 +115,4 @@ func (c *connrsp) WriteWithRsp(req *packet.Request, resp interface{}) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-}
-
-func randInt() int {
-loop:
-	rnum, err := rand.Int(rand.Reader, big.NewInt(1000))
-	if err != nil {
-		goto loop
-	}
-	return int(rnum.Int64())
-
 }
